@@ -1,1 +1,58 @@
-
+table ip webserver {
+    set sysadmin {
+        type ipv4_addr
+        flags interval
+        elements = {10.10.10.0/24}
+    }
+    set network10 {
+        type ipv4_addr
+        flags interval
+        elements = {10.0.0.0/8}
+    }
+    set sales {
+        type ipv4_addr
+        flags interval
+        elements = {172.16.0.0/24}
+    }
+    set finances {
+        type ipv4_addr
+        flags interval
+        elements = {192.168.242.0/24}
+    }
+    chain main_input {
+        type filter hook input priority 0;
+        policy drop;
+        iifname "lo" accept
+        ip saddr @sysadmin counter goto sysadmin_rules
+        ip saddr @network10 counter goto network10_rules
+        ip saddr @sales counter goto sales_rules
+        ip saddr @finances counter goto finances_rules
+    }
+    chain sysadmin_rules {
+        ip protocol icmp accept
+        tcp dport { 22, 80, 3306 } accept
+    }
+    chain network10 {
+        drop
+    }
+    chain sales_rules {
+        tcp dport 80 accept
+        udp dport 69 accept
+    }
+    chain finances_rules{
+        udp dport 69 accept
+    }
+    chain output {
+        type filter hook output priority 0;
+        policy drop;
+        oifname "lo" accept
+        # Rules for traffic returning to the SysAdmin LAN
+        tcp sport { 22 , 80, 3306 } ip daddr @sysadmin ct state { established, related } accept
+        ip protocol icmp ip daddr @sysadmin ct state { established, related } accept
+        # Rules for traffic returning to Sales
+        tcp sport 80 ip daddr @sales ct state { established, related } accept
+        udp sport 69 ip daddr @sales ct state { established, related } accept
+        # Rules for traffic returning to Finances
+        udp sport 69 ip daddr @finances ct state { established, related } accept
+    }
+}
